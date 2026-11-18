@@ -1,5 +1,5 @@
 diff --git a/research/module-sigcheck-disasm.txt b/research/module-sigcheck-disasm.txt
-index 0dd53bd..5cdd99c 100644
+index 0dd53bd..c909b46 100644
 --- a/research/module-sigcheck-disasm.txt
 +++ b/research/module-sigcheck-disasm.txt
 @@ -18,7 +18,7 @@ Disassembly of section .data:
@@ -11,3 +11,12 @@ index 0dd53bd..5cdd99c 100644
    100b28:	aa0003f3 	mov	x19, x0
    100b2c:	aa0003fb 	mov	x27, x0
    100b30:	f8410e68 	ldr	x8, [x19, #16]!
+@@ -32,7 +32,7 @@ Disassembly of section .data:
+   100b50:	52800382 	mov	w2, #0x1c                  	// #28
+   100b54:	943f4c54 	bl	0x10d3ca4
+   100b58:	34000240 	cbz	w0, 0x100ba0
+-  100b5c:	d2800280 	mov	x20, #0x0                    	// PATCH: was -ENOKEY
++  100b5c:	52800014 	mov	w20, #0x0                    	// PATCH: was movn x20, #125 (-ENOKEY)
+   100b60:	f94002a0 	ldr	x0, [x21]
+   100b64:	940336e3 	bl	0x1ce6f0
+   100b68:	b000f469 	adrp	x9, 0x1f8d000
