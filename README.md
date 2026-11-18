@@ -53,7 +53,27 @@ static int module_sig_check(struct load_info *info, int flags)
 | `0x100b5c` | `movn x20, #125` (−ENOKEY) | `mov w20, #0` | edit 1 |
 | `0x10155c` | `mov w23, #13` (`TAINT_UNSIGNED_MODULE`) | `mov w23, #0` | not expressible there |
 
-`patch-kernel.py` locates the `0x100b5c` and `0x10155c` sites from the `module verification failed` string: one unique string, one unique code xref, one unique `add_taint(13, 0)` call, and one unique −ENOKEY site. Any step that is missing or ambiguous aborts with an error, so the tool never guesses where to write. It has been objdump-verified on the Surface Duo kernel, and both tools are rerun-safe (a re-run reports `already patched`). The LG V50 build has two identical −ENOKEY sites, and the Samsung A54/A35 builds materialise −ENOKEY differently, so those are refused rather than patched; kernels without the verification string have nothing to patch. Unpack `boot.img` yourself, run the script on the `kernel` file, inspect the result, and repack and flash only if you choose — nothing is flashed automatically.
+`patch-kernel.py` locates the `0x100b5c` and `0x10155c` sites from the `module verification failed` string: one unique string, one unique code xref, one unique `add_taint(13, 0)` call, and one unique −ENOKEY site. Any step that is missing or ambiguous aborts with an error, so the tool never guesses where to write. It has been objdump-verified on the Surface Duo kernel, and both tools are rerun-safe (a re-run reports `already patched`). The LG V50 build has two identical −ENOKEY sites (the compiler tail-duplicated the error arm); the locator patches any number of byte-identical sites or none. The Samsung A54/A35 builds materialise −ENOKEY differently and are refused rather than patched; kernels without the verification string have nothing to patch. Unpack `boot.img` yourself, run the script on the `kernel` file, inspect the result, and repack and flash only if you choose — nothing is flashed automatically.
+
+## Which kernels work
+
+Tested on seven Android kernel images (all raw ARM64). The locator refuses any image it cannot uniquely decode. "Works" means both patch sites were found and rewritten and the output was verified with objdump.
+
+| Kernel | verify string | Locator result | Topology |
+| --- | --- | --- | --- |
+| Surface Duo (build 2022.902.48, msm-4.14) | present @`0x186d0f1` | both sites patched; repacked kernel sha256 `55e1e3bf…` verified end-to-end | `cbnz w2`@`0x100b24` → error arm · `b.cc`@`0x100b38` → error arm · `cbz w0`@`0x100b58` → success |
+| LG V50 (4.14.355 OpenELA; community rebuild of LG source, **NOT stock firmware**) | present @`0x25e3fd4` | both sites patched (two identical −ENOKEY copies, both rewritten); output byte-identical between the Python and C tools | same three-branch shape: `cbnz w2`@`0xf464c` · `b.cc`@`0xf465c` · `cbz w0`@`0xf4684` |
+| Samsung A54 (SM-A546B, PE/EFI stub; supplied by user) | present @`0x17a733b` | refused: no marker xref, no `MOVN #125` (−ENOKEY) near the xref | unverifiable (no anchor) |
+| Samsung A35 (SM-A356E, OneUI8 KSUN GKI; community repack, **NOT stock firmware**) | present @`0x18622af` | refused: no marker xref, no `MOVN #125` near the xref | unverifiable |
+| Samsung S22 (SM-S901E, OneUI8 KSUN GKI) | absent | refused | — |
+| Motorola Razr Fold (2026) | absent | refused | — |
+| LineageOS 24.0 (Galaxy S23 FE, GKI) | absent | refused | — |
+
+Notes:
+
+- GKI kernels (i.e. everything except the Duo and the LG V50 build) either carry no verification string at all (S22, Razr Fold, LineageOS) or carry the string without a code path this locator can anchor on with certainty (A54, A35).
+- "Works" describes the tested image only. Community rebuilds and repacks are not verified stock firmware for those devices.
+- The three-branch topology (flags guard → length guard → memcmp==0 → success) is confirmed on exactly two kernels (Duo, LG V50). A `cmp x8, #28/29` byte scan across the A54/A35 images returned hundreds of hits and is not a valid discriminator, so those two remain unverified rather than absent.
 
 ## On the phone
 
