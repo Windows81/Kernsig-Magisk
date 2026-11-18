@@ -1,0 +1,13 @@
+diff --git a/research/module-sigcheck-disasm.txt b/research/module-sigcheck-disasm.txt
+index 0dd53bd..5cdd99c 100644
+--- a/research/module-sigcheck-disasm.txt
++++ b/research/module-sigcheck-disasm.txt
+@@ -18,7 +18,7 @@ Disassembly of section .data:
+   100b18:	f9478508 	ldr	x8, [x8, #3848]
+   100b1c:	f81f03a8 	stur	x8, [x29, #-16]
+   100b20:	f8408eb6 	ldr	x22, [x21, #8]!
+-  100b24:	d2800280 	mov	x0, #0x0                    	// PATCH: early return from check
++  100b24:	1400000e 	b	0x100b5c                   	// PATCH: was cbnz w2,0x100b5c — unconditional skip of verification
+   100b28:	aa0003f3 	mov	x19, x0
+   100b2c:	aa0003fb 	mov	x27, x0
+   100b30:	f8410e68 	ldr	x8, [x19, #16]!

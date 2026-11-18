@@ -1,0 +1,6 @@
+id=kernsig
+name=KernSig Research
+version=v1.0
+versionCode=1
+author=Inkling 2 Small Free
+description=Offline demonstrator for the Surface Duo module-signature check.
