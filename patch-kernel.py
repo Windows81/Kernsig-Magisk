@@ -51,10 +51,15 @@ def xrefs(data, page, low):
 
 
 def movz_imm13_rd(w):
-    """If w decodes as `mov wRd, #13` (32-bit MOVZ, hw=0), return Rd, else None."""
-    if (w & 0xFF800000) == 0x52800000 and ((w >> 5) & 0xFFFF) == 13:
+    """If w decodes as `mov wRd, #13` or `mov wRd, #0` (the post-patch form),
+    return Rd, else None."""
+    imm = (w >> 5) & 0xFFFF
+    if (w & 0xFF800000) == 0x52800000 and imm in (13, 0):
         return w & 0x1F
     return None
+
+def movz_imm_of(w):
+    return (w >> 5) & 0xFFFF
 
 
 def movn_imm125_rd(w):
@@ -77,7 +82,7 @@ def taint_sites(data, lo, hi):
             continue
         rd = movz_imm13_rd(w)
         if rd is not None:
-            out.append((i, rd))  # mov wRd,#13 ; mov w1,wzr ; (orr w0,wzr,wRd for B)
+            out.append((i, rd, movz_imm_of(w)))
     return out
 
 
@@ -87,7 +92,7 @@ def enokey_sites(data, lo, hi):
         w = int.from_bytes(data[i:i + 4], "little")
         d = movn_imm125_rd(w)
         if d is not None:
-            out.append((i, d[0]))
+            out.append((i, d))  # (Rd, is64)
     return out
 
 
@@ -95,7 +100,12 @@ def main(argv):
     if not argv or "-h" in argv or "--help" in argv:
         print(__doc__)
         return 0 if argv else 64
-    data = bytearray(open(argv[0], "rb").read())
+    try:
+        with open(argv[0], "rb") as f:
+            data = bytearray(f.read())
+    except OSError as e:
+        print(f"patch: cannot read {argv[0]}: {e.strerror or e}", file=sys.stderr)
+        return 1
     strs = find_all(data, VERIFY)
     if len(strs) != 1:
         print(f"patch: expected 1 verification string, got {len(strs)}", file=sys.stderr)
@@ -108,18 +118,31 @@ def main(argv):
     xref = refs[0][0]
     lo, hi = max(0, xref - 0x2000), min(len(data), xref + 0x1000)
     taints = taint_sites(data, lo, hi)
+    errors = enokey_sites(data, lo, hi)
+    if len(taints) == 1 and taints[0][2] == 0 and not errors:
+        print("patch: already patched (taint zero present, no -ENOKEY site)")
+        return 0
     if len(taints) != 1:
         print(f"patch: expected 1 taint call near xref, got {len(taints)}", file=sys.stderr)
         return 1
-    errors = enokey_sites(data, lo, hi)
-    if len(errors) != 1:
-        print(f"patch: expected 1 -ENOKEY site near xref, got {len(errors)}", file=sys.stderr)
+    if not errors:
+        print("patch: no -ENOKEY site near xref", file=sys.stderr)
         return 1
+    # The compiler may tail-duplicate the error arm (e.g. LG V50 has two
+    # identical movn x21,#125). Patch either every copy or none.
+    if len(set(d for _, d in errors)) != 1:
+        print(f"patch: -ENOKEY sites differ: {[(hex(o), d) for o, d in errors]}", file=sys.stderr)
+        return 1
+    t_imm = taints[0][2]
+    e_rd = errors[0][1][0]
 
-    t_off, t_rd = taints[0]
-    e_off, e_rd = errors[0]
-    plan = [(t_off, 0x52800000 | t_rd, movz_imm13_rd),
-            (e_off, 0x52800000 | e_rd, lambda w: (w & 0x1F) if movn_imm125_rd(w) else None)]
+    if t_imm != 13:
+        print(f"patch: taint site at 0x{taints[0][0]:X} holds 0 but -ENOKEY sites remain; refusing a mixed image", file=sys.stderr)
+        return 1
+    t_off, t_rd = taints[0][0], taints[0][1]
+    plan = [(t_off, 0x52800000 | t_rd, movz_imm13_rd)]
+    for off, _ in errors:
+        plan.append((off, 0x52800000 | e_rd, lambda w: (w & 0x1F) if movn_imm125_rd(w) else None))
 
     already = 0
     edits = []
@@ -137,8 +160,8 @@ def main(argv):
 
     out = argv[0] + ".patched"
     open(out, "wb").write(data)
-    state = "already patched" if already == 2 else "patched"
-    print(f"patch: xref=0x{xref:X} taint=0x{t_off:X} err=0x{e_off:X}")
+    state = "already patched" if already == len(plan) else "patched"
+    print(f"patch: xref=0x{xref:X} taint=0x{t_off:X} err={[hex(o) for o, _ in errors]}")
     print(f"patch: {state} -> {out} (repack manually; nothing is flashed)")
     return 0
 

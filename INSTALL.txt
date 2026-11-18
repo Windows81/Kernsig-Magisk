@@ -1,0 +1,35 @@
+KernSig Flash - on-device kit (static aarch64, no dependencies)
+===============================================================
+
+What it is
+  Patches a COPY of your boot image so its kernel accepts unsigned modules.
+  It never touches a block device and never flashes anything. It produces
+  boot.img.patched; flashing that is a separate, manual step that you run
+  yourself with fastboot (or a custom recovery). You own the device, your
+  bootloader is unlocked - that is the only setup this is meant for.
+
+Requirements
+  - Android 10+ with Magisk (uses /data/adb/magisk/magiskboot).
+  - Root. Run via su.
+  - The boot image for YOUR build (from the factory image), not a guess.
+
+How to use
+  1. Copy this folder to the phone, e.g. /data/local/tmp/kernsig-flash-kit
+  2. Get your boot image, e.g. from the factory image for your build
+  3. su -c 'sh flash.sh /data/local/tmp/kernsig-flash-kit/boot.img'
+  4. It prints "kernel patched, image verified" and writes <boot.img>.patched
+  5. Flash it YOURSELF, e.g.:  fastboot flash boot_a boot.img.patched
+     (use boot_b for slot B; Android 13+ split-GKI devices may carry the
+      kernel in init_boot instead - this kit does not handle that split)
+
+What it verifies before writing
+  1 string + 1 code xref + 1 add_taint(13, 0) call + identical -ENOKEY sites.
+  Any of those ambiguous or missing: it refuses and writes nothing.
+
+What it never does
+  - never writes to a block device; your stock slot stays untouched until
+    you flash the image yourself.
+  - never flashes for you, even if you ask it to.
+
+sha256
+  kernsig-flash: 20845ec4232863a711df4e95fe3385a7adee9a41c11f752090f91268a1207448
